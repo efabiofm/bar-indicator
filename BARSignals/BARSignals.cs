@@ -13,6 +13,9 @@ namespace cAlgo.Indicators
         [Output("SellSignal", PlotType = PlotType.Points, LineColor = "Red")]
         public IndicatorDataSeries SellSignal { get; set; }
 
+        [Parameter("Alertas: Sonido", DefaultValue = true)]
+        public bool AlertsSound { get; set; }
+
         // OR15
         private double rangeHigh = double.NaN;
         private double rangeLow  = double.NaN;
@@ -221,6 +224,7 @@ namespace cAlgo.Indicators
                     Chart.DrawIcon(id, ChartIconType.UpTriangle, Bars.OpenTimes[index], curLow - offset, Color.LimeGreen);
                 }
                 BuySignal[index] = 1.0;
+                FireAlert($"RT_{tag}", "BUY", index, Bars.ClosePrices[index]);
                 return true;
             }
             return false;
@@ -245,6 +249,7 @@ namespace cAlgo.Indicators
                     Chart.DrawIcon(id, ChartIconType.DownTriangle, Bars.OpenTimes[index], curHigh + offset, Color.Red);
                 }
                 SellSignal[index] = -1.0;
+                FireAlert($"RT_{tag}", "SELL", index, Bars.ClosePrices[index]);
                 return true;
             }
             return false;
@@ -313,6 +318,19 @@ namespace cAlgo.Indicators
             int offset = ((int)dow - (int)first.DayOfWeek + 7) % 7;
             int day = 1 + offset + (n - 1) * 7;
             return new DateTime(year, month, day);
+        }
+
+        private void FireAlert(string context, string side, int index, double price)
+        {
+            // Ejecutar solo en tiempo real (no backtest)
+            if (!IsLastBar) return;
+
+            string msg = $"{side} {context} @ {price:0.#####}  {SymbolName}  {TimeFrame}  {Bars.OpenTimes[index]:yyyy-MM-dd HH:mm}";
+
+            if (AlertsSound)
+                Notifications.PlaySound(SoundType.PositiveNotification); // o Warning/Alert, etc.
+
+            Print("[ALERTA] {0}", msg);
         }
     }
 }
