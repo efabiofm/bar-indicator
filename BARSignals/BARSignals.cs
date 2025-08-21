@@ -16,6 +16,15 @@ namespace cAlgo.Indicators
         [Parameter("Alertas: Sonido", DefaultValue = true)]
         public bool AlertsSound { get; set; }
 
+        [Parameter("Usar Opening Range", DefaultValue = true, Group = "Niveles")]
+        public bool UseOpeningRange { get; set; }
+
+        [Parameter("Usar Previous Market (Premarket)", DefaultValue = true, Group = "Niveles")]
+        public bool UsePremarket { get; set; }
+
+        [Parameter("Usar Previous Day", DefaultValue = true, Group = "Niveles")]
+        public bool UsePreviousDay { get; set; }
+
         // OR15
         private double rangeHigh = double.NaN;
         private double rangeLow  = double.NaN;
@@ -64,12 +73,15 @@ namespace cAlgo.Indicators
                 rangeLow  = double.NaN;
                 preMarketHigh = double.NaN;
                 preMarketLow  = double.NaN;
+                prevSessHigh = double.NaN;
+                prevSessLow  = double.NaN;
 
                 brokeUpORH = brokeDownORL = false;
                 brokeUpPDH = brokeDownPDL = false;
                 brokeUpPMH = brokeDownPML = false;
 
-                ComputePreviousSessionHL();
+                if (UsePreviousDay)
+                    ComputePreviousSessionHL();
             }
 
             var orStartEt    = currentEtDate.AddHours(9).AddMinutes(30);
@@ -82,7 +94,7 @@ namespace cAlgo.Indicators
             var sessEndUtc = EtToUtc(sessEndEt);
 
             // Construcción OR 9:30–9:45
-            if (et >= orStartEt && et < orEndEt)
+            if (UseOpeningRange && et >= orStartEt && et < orEndEt)
             {
                 var h = Bars.HighPrices[index];
                 var l = Bars.LowPrices[index];
@@ -91,7 +103,7 @@ namespace cAlgo.Indicators
             }
 
             // Construcción Premarket 4:00–9:29
-            if (et >= preMarketEt1 && et <= preMarketEt2)
+            if (UsePremarket && et >= preMarketEt1 && et <= preMarketEt2)
             {
                 var h = Bars.HighPrices[index];
                 var l = Bars.LowPrices[index];
@@ -115,26 +127,29 @@ namespace cAlgo.Indicators
         private void DrawSessionSegments(DateTime x1Utc, DateTime x2Utc)
         {
             // OR15 gris
-            if (!double.IsNaN(rangeHigh))
+            if (UseOpeningRange && !double.IsNaN(rangeHigh))
                 Chart.DrawTrendLine(HighId, x1Utc, rangeHigh, x2Utc, rangeHigh, Color.Gray, 1, LineStyle.Solid);
-            if (!double.IsNaN(rangeLow))
+            if (UseOpeningRange && !double.IsNaN(rangeLow))
                 Chart.DrawTrendLine(LowId,  x1Utc, rangeLow,  x2Utc, rangeLow,  Color.Gray, 1, LineStyle.Solid);
 
             // Mid en LINEAS (rayas)
-            var mid = (!double.IsNaN(rangeHigh) && !double.IsNaN(rangeLow)) ? (rangeHigh + rangeLow) * 0.5 : double.NaN;
-            if (!double.IsNaN(mid))
-                Chart.DrawTrendLine(MidId, x1Utc, mid, x2Utc, mid, Color.Gray, 1, LineStyle.Lines);
+            if (UseOpeningRange)
+            {
+                var mid = (!double.IsNaN(rangeHigh) && !double.IsNaN(rangeLow)) ? (rangeHigh + rangeLow) * 0.5 : double.NaN;
+                if (!double.IsNaN(mid))
+                    Chart.DrawTrendLine(MidId, x1Utc, mid, x2Utc, mid, Color.Gray, 1, LineStyle.Lines);
+            }
 
             // PDH/PDL en AMARILLO
-            if (!double.IsNaN(prevSessHigh))
+            if (UsePreviousDay && !double.IsNaN(prevSessHigh))
                 Chart.DrawTrendLine(PDHId, x1Utc, prevSessHigh, x2Utc, prevSessHigh, Color.Yellow, 1, LineStyle.Solid);
-            if (!double.IsNaN(prevSessLow))
+            if (UsePreviousDay && !double.IsNaN(prevSessLow))
                 Chart.DrawTrendLine(PDLId, x1Utc, prevSessLow,  x2Utc, prevSessLow,  Color.Yellow, 1, LineStyle.Solid);
 
             // PMH/PML azul
-            if (!double.IsNaN(preMarketHigh))
+            if (UsePremarket && !double.IsNaN(preMarketHigh))
                 Chart.DrawTrendLine(PMHId, x1Utc, preMarketHigh, x2Utc, preMarketHigh, Color.Blue, 1, LineStyle.Solid);
-            if (!double.IsNaN(preMarketLow))
+            if (UsePremarket && !double.IsNaN(preMarketLow))
                 Chart.DrawTrendLine(PMLId, x1Utc, preMarketLow,  x2Utc, preMarketLow,  Color.Blue, 1, LineStyle.Solid);
         }
 
@@ -144,27 +159,27 @@ namespace cAlgo.Indicators
             double open = Bars.OpenPrices[index];
             double close = Bars.ClosePrices[index];
 
-            // OR cuando existe
-            if (!double.IsNaN(rangeHigh) && !double.IsNaN(rangeLow))
+            // OR cuando existe y está habilitado
+            if (UseOpeningRange && !double.IsNaN(rangeHigh) && !double.IsNaN(rangeLow))
             {
                 if (!brokeUpORH   && open < rangeHigh && close >= rangeHigh && close > open)  brokeUpORH  = true;
                 if (!brokeDownORL && open > rangeLow  && close <= rangeLow  && close < open) brokeDownORL = true;
             }
 
-            if (!double.IsNaN(prevSessHigh))
+            if (UsePreviousDay && !double.IsNaN(prevSessHigh))
                 if (!brokeUpPDH   && open < prevSessHigh && close >= prevSessHigh && close > open)  brokeUpPDH = true;
 
-            if (!double.IsNaN(prevSessLow))
+            if (UsePreviousDay && !double.IsNaN(prevSessLow))
                 if (!brokeDownPDL && open > prevSessLow  && close <= prevSessLow  && close < open)  brokeDownPDL = true;
 
-            if (!double.IsNaN(preMarketHigh))
+            if (UsePremarket && !double.IsNaN(preMarketHigh))
                 if (!brokeUpPMH   && open < preMarketHigh && close >= preMarketHigh && close > open) brokeUpPMH = true;
 
-            if (!double.IsNaN(preMarketLow))
+            if (UsePremarket && !double.IsNaN(preMarketLow))
                 if (!brokeDownPML && open > preMarketLow  && close <= preMarketLow  && close < open)  brokeDownPML = true;
         }
 
-        // Un triángulo por vela. Prioridad OR > PD > PM.
+        // Un triángulo por vela. Prioridad OR > PD > PM (si están habilitados).
         private void CheckAndMarkRetests(int index)
         {
             if (index < 1) return;
@@ -177,32 +192,27 @@ namespace cAlgo.Indicators
             double prevHigh = Bars.HighPrices[index - 1];
             double prevLow  = Bars.LowPrices[index - 1];
 
-            // Color de vela
             bool isGreen = close > open;
             bool isRed   = close < open;
             if (!isGreen && !isRed) return;
 
-            // Geometría de mechas
             double bodyTop = Math.Max(open, close);
             double bodyBot = Math.Min(open, close);
             double upperWick = Math.Max(0.0, high - bodyTop);
             double lowerWick = Math.Max(0.0, bodyBot - low);
 
-            // Rechazo
             bool isBullRejection = lowerWick >= 2.0 * upperWick;
             bool isBearRejection = upperWick >= 2.0 * lowerWick;
 
-            // Largos: tras breakout UP, retest con mecha tocando nivel, cuerpo encima,
-            // prevHigh DEBE ser > high actual, vela verde y de rechazo.
-            if (TryBullRetest(index, "ORH", rangeHigh,   brokeUpORH,   low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
-            if (TryBullRetest(index, "PDH", prevSessHigh, brokeUpPDH,   low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
-            if (TryBullRetest(index, "PMH", preMarketHigh, brokeUpPMH,  low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
+            // Largos: OR -> PD -> PM
+            if (UseOpeningRange && TryBullRetest(index, "ORH", rangeHigh,   brokeUpORH,   low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
+            if (UsePreviousDay && TryBullRetest(index, "PDH", prevSessHigh, brokeUpPDH,   low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
+            if (UsePremarket   && TryBullRetest(index, "PMH", preMarketHigh, brokeUpPMH,  low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
 
-            // Cortos: tras breakout DOWN, retest con mecha tocando nivel, cuerpo debajo,
-            // prevLow DEBE ser < low actual, vela roja y de rechazo.
-            if (TryBearRetest(index, "ORL", rangeLow,    brokeDownORL,  high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
-            if (TryBearRetest(index, "PDL", prevSessLow,  brokeDownPDL,  high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
-            if (TryBearRetest(index, "PML", preMarketLow, brokeDownPML,  high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
+            // Cortos: OR -> PD -> PM
+            if (UseOpeningRange && TryBearRetest(index, "ORL", rangeLow,    brokeDownORL,  high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
+            if (UsePreviousDay && TryBearRetest(index, "PDL", prevSessLow,  brokeDownPDL,  high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
+            if (UsePremarket   && TryBearRetest(index, "PML", preMarketLow, brokeDownPML,  high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
         }
 
         // Retest alcista
@@ -213,7 +223,7 @@ namespace cAlgo.Indicators
             if (!brokeUp || double.IsNaN(level) || !isGreen || !isRejection) return false;
 
             bool wickTouches = curLow <= level && bodyBot >= level; // mecha toca y cuerpo por encima
-            bool prevHighOk  = prevHigh > Bars.HighPrices[index];   // máximo previo DEBE ser mayor al actual
+            bool prevHighOk  = prevHigh > Bars.HighPrices[index];   // máximo previo mayor al actual
 
             if (wickTouches && prevHighOk)
             {
@@ -238,7 +248,7 @@ namespace cAlgo.Indicators
             if (!brokeDown || double.IsNaN(level) || !isRed || !isRejection) return false;
 
             bool wickTouches = curHigh >= level && bodyTop <= level; // mecha toca y cuerpo por debajo
-            bool prevLowOk   = prevLow < Bars.LowPrices[index];      // mínimo previo DEBE ser menor al actual
+            bool prevLowOk   = prevLow < Bars.LowPrices[index];      // mínimo previo menor al actual
 
             if (wickTouches && prevLowOk)
             {
@@ -322,13 +332,12 @@ namespace cAlgo.Indicators
 
         private void FireAlert(string context, string side, int index, double price)
         {
-            // Ejecutar solo en tiempo real (no backtest)
             if (!IsLastBar) return;
 
             string msg = $"{side} {context} @ {price:0.#####}  {SymbolName}  {TimeFrame}  {Bars.OpenTimes[index]:yyyy-MM-dd HH:mm}";
 
             if (AlertsSound)
-                Notifications.PlaySound(SoundType.PositiveNotification); // o Warning/Alert, etc.
+                Notifications.PlaySound(SoundType.PositiveNotification);
 
             Print("[ALERTA] {0}", msg);
         }
