@@ -15,9 +15,6 @@ namespace cAlgo.Indicators
         [Output("SellSignal", PlotType = PlotType.Points, LineColor = "Red")]
         public IndicatorDataSeries SellSignal { get; set; }
 
-        [Parameter("Alertas: Sonido", DefaultValue = true)]
-        public bool AlertsSound { get; set; }
-
         [Parameter("Usar Opening Range", DefaultValue = true, Group = "Niveles")]
         public bool UseOpeningRange { get; set; }
 
@@ -30,44 +27,47 @@ namespace cAlgo.Indicators
         [Parameter("Modo de Señal", DefaultValue = SignalKind.Retest, Group = "Señales")]
         public SignalKind Mode { get; set; }
 
+        [Parameter("Alertas: Sonido", DefaultValue = true)]
+        public bool AlertsSound { get; set; }
+
         // OR15
         private double rangeHigh = double.NaN;
-        private double rangeLow  = double.NaN;
+        private double rangeLow = double.NaN;
 
         // Previous Day session (regular hours)
         private double prevSessHigh = double.NaN;
-        private double prevSessLow  = double.NaN;
+        private double prevSessLow = double.NaN;
 
         // Current day premarket
         private double preMarketHigh = double.NaN;
-        private double preMarketLow  = double.NaN;
+        private double preMarketLow = double.NaN;
 
         private DateTime currentEtDate = DateTime.MinValue;
 
         // Estado de breakouts por nivel (habilita retests)
-        private bool brokeUpORH,  brokeDownORL;
-        private bool brokeUpPDH,  brokeDownPDL;
-        private bool brokeUpPMH,  brokeDownPML;
+        private bool brokeUpORH, brokeDownORL;
+        private bool brokeUpPDH, brokeDownPDL;
+        private bool brokeUpPMH, brokeDownPML;
 
         // IDs por día (mantener históricos visibles)
         private string HighId => $"OR15_H_SEG_{currentEtDate:yyyyMMdd}";
-        private string LowId  => $"OR15_L_SEG_{currentEtDate:yyyyMMdd}";
-        private string MidId  => $"OR15_M_SEG_{currentEtDate:yyyyMMdd}";
-        private string PDHId  => $"PDH_SEG_{currentEtDate:yyyyMMdd}";
-        private string PDLId  => $"PDL_SEG_{currentEtDate:yyyyMMdd}";
-        private string PMHId  => $"PMH_SEG_{currentEtDate:yyyyMMdd}";
-        private string PMLId  => $"PML_SEG_{currentEtDate:yyyyMMdd}";
+        private string LowId => $"OR15_L_SEG_{currentEtDate:yyyyMMdd}";
+        private string MidId => $"OR15_M_SEG_{currentEtDate:yyyyMMdd}";
+        private string PDHId => $"PDH_SEG_{currentEtDate:yyyyMMdd}";
+        private string PDLId => $"PDL_SEG_{currentEtDate:yyyyMMdd}";
+        private string PMHId => $"PMH_SEG_{currentEtDate:yyyyMMdd}";
+        private string PMLId => $"PML_SEG_{currentEtDate:yyyyMMdd}";
 
         // Evitar duplicados intra-bar
         private readonly HashSet<string> _marked = new HashSet<string>();
 
         public override void Calculate(int index)
         {
-            BuySignal[index]  = double.NaN;
+            BuySignal[index] = double.NaN;
             SellSignal[index] = double.NaN;
 
             var utc = Bars.OpenTimes[index];
-            var et  = UtcToEt(utc);
+            var et = UtcToEt(utc);
 
             // Nuevo día ET
             if (et.Date != currentEtDate)
@@ -75,11 +75,11 @@ namespace cAlgo.Indicators
                 currentEtDate = et.Date;
 
                 rangeHigh = double.NaN;
-                rangeLow  = double.NaN;
+                rangeLow = double.NaN;
                 preMarketHigh = double.NaN;
-                preMarketLow  = double.NaN;
-                prevSessHigh  = double.NaN;
-                prevSessLow   = double.NaN;
+                preMarketLow = double.NaN;
+                prevSessHigh = double.NaN;
+                prevSessLow = double.NaN;
 
                 brokeUpORH = brokeDownORL = false;
                 brokeUpPDH = brokeDownPDL = false;
@@ -89,9 +89,9 @@ namespace cAlgo.Indicators
                     ComputePreviousSessionHL();
             }
 
-            var orStartEt    = currentEtDate.AddHours(9).AddMinutes(30);
-            var orEndEt      = orStartEt.AddMinutes(15);
-            var sessEndEt    = currentEtDate.AddHours(16);
+            var orStartEt = currentEtDate.AddHours(9).AddMinutes(30);
+            var orEndEt = orStartEt.AddMinutes(15);
+            var sessEndEt = currentEtDate.AddHours(16);
             var preMarketEt1 = currentEtDate.AddHours(4);
             var preMarketEt2 = orStartEt.AddMinutes(-1);
 
@@ -104,7 +104,7 @@ namespace cAlgo.Indicators
                 var h = Bars.HighPrices[index];
                 var l = Bars.LowPrices[index];
                 rangeHigh = double.IsNaN(rangeHigh) ? h : Math.Max(rangeHigh, h);
-                rangeLow  = double.IsNaN(rangeLow)  ? l : Math.Min(rangeLow,  l);
+                rangeLow = double.IsNaN(rangeLow) ? l : Math.Min(rangeLow, l);
             }
 
             // Construcción Premarket 4:00–9:29
@@ -113,7 +113,7 @@ namespace cAlgo.Indicators
                 var h = Bars.HighPrices[index];
                 var l = Bars.LowPrices[index];
                 preMarketHigh = double.IsNaN(preMarketHigh) ? h : Math.Max(preMarketHigh, h);
-                preMarketLow  = double.IsNaN(preMarketLow)  ? l : Math.Min(preMarketLow,  l);
+                preMarketLow = double.IsNaN(preMarketLow) ? l : Math.Min(preMarketLow, l);
             }
 
             // Dibujar líneas durante sesión
@@ -140,7 +140,7 @@ namespace cAlgo.Indicators
             if (UseOpeningRange && !double.IsNaN(rangeHigh))
                 Chart.DrawTrendLine(HighId, x1Utc, rangeHigh, x2Utc, rangeHigh, Color.Gray, 1, LineStyle.Solid);
             if (UseOpeningRange && !double.IsNaN(rangeLow))
-                Chart.DrawTrendLine(LowId,  x1Utc, rangeLow,  x2Utc, rangeLow,  Color.Gray, 1, LineStyle.Solid);
+                Chart.DrawTrendLine(LowId, x1Utc, rangeLow, x2Utc, rangeLow, Color.Gray, 1, LineStyle.Solid);
 
             // Mid (rayas)
             if (UseOpeningRange)
@@ -154,13 +154,13 @@ namespace cAlgo.Indicators
             if (UsePreviousDay && !double.IsNaN(prevSessHigh))
                 Chart.DrawTrendLine(PDHId, x1Utc, prevSessHigh, x2Utc, prevSessHigh, Color.Yellow, 1, LineStyle.Solid);
             if (UsePreviousDay && !double.IsNaN(prevSessLow))
-                Chart.DrawTrendLine(PDLId, x1Utc, prevSessLow,  x2Utc, prevSessLow,  Color.Yellow, 1, LineStyle.Solid);
+                Chart.DrawTrendLine(PDLId, x1Utc, prevSessLow, x2Utc, prevSessLow, Color.Yellow, 1, LineStyle.Solid);
 
             // PMH/PML azul
             if (UsePremarket && !double.IsNaN(preMarketHigh))
                 Chart.DrawTrendLine(PMHId, x1Utc, preMarketHigh, x2Utc, preMarketHigh, Color.Blue, 1, LineStyle.Solid);
             if (UsePremarket && !double.IsNaN(preMarketLow))
-                Chart.DrawTrendLine(PMLId, x1Utc, preMarketLow,  x2Utc, preMarketLow,  Color.Blue, 1, LineStyle.Solid);
+                Chart.DrawTrendLine(PMLId, x1Utc, preMarketLow, x2Utc, preMarketLow, Color.Blue, 1, LineStyle.Solid);
         }
 
         // Marca estado de breakout por nivel usando CUERPO
@@ -171,21 +171,21 @@ namespace cAlgo.Indicators
 
             if (UseOpeningRange && !double.IsNaN(rangeHigh) && !double.IsNaN(rangeLow))
             {
-                if (!brokeUpORH   && open < rangeHigh && close >= rangeHigh && close > open)  brokeUpORH  = true;
-                if (!brokeDownORL && open > rangeLow  && close <= rangeLow  && close < open) brokeDownORL = true;
+                if (!brokeUpORH && open < rangeHigh && close >= rangeHigh && close > open) brokeUpORH = true;
+                if (!brokeDownORL && open > rangeLow && close <= rangeLow && close < open) brokeDownORL = true;
             }
 
             if (UsePreviousDay && !double.IsNaN(prevSessHigh))
-                if (!brokeUpPDH   && open < prevSessHigh && close >= prevSessHigh && close > open)  brokeUpPDH = true;
+                if (!brokeUpPDH && open < prevSessHigh && close >= prevSessHigh && close > open) brokeUpPDH = true;
 
             if (UsePreviousDay && !double.IsNaN(prevSessLow))
-                if (!brokeDownPDL && open > prevSessLow  && close <= prevSessLow  && close < open)  brokeDownPDL = true;
+                if (!brokeDownPDL && open > prevSessLow && close <= prevSessLow && close < open) brokeDownPDL = true;
 
             if (UsePremarket && !double.IsNaN(preMarketHigh))
-                if (!brokeUpPMH   && open < preMarketHigh && close >= preMarketHigh && close > open) brokeUpPMH = true;
+                if (!brokeUpPMH && open < preMarketHigh && close >= preMarketHigh && close > open) brokeUpPMH = true;
 
             if (UsePremarket && !double.IsNaN(preMarketLow))
-                if (!brokeDownPML && open > preMarketLow  && close <= preMarketLow  && close < open)  brokeDownPML = true;
+                if (!brokeDownPML && open > preMarketLow && close <= preMarketLow && close < open) brokeDownPML = true;
         }
 
         // -------- Señales --------
@@ -195,16 +195,16 @@ namespace cAlgo.Indicators
         {
             if (index < 1) return;
 
-            double open  = Bars.OpenPrices[index];
+            double open = Bars.OpenPrices[index];
             double close = Bars.ClosePrices[index];
-            double high  = Bars.HighPrices[index];
-            double low   = Bars.LowPrices[index];
+            double high = Bars.HighPrices[index];
+            double low = Bars.LowPrices[index];
 
             double prevHigh = Bars.HighPrices[index - 1];
-            double prevLow  = Bars.LowPrices[index - 1];
+            double prevLow = Bars.LowPrices[index - 1];
 
             bool isGreen = close > open;
-            bool isRed   = close < open;
+            bool isRed = close < open;
             if (!isGreen && !isRed) return;
 
             double bodyTop = Math.Max(open, close);
@@ -212,26 +212,26 @@ namespace cAlgo.Indicators
             double upperWick = Math.Max(0.0, high - bodyTop);
             double lowerWick = Math.Max(0.0, bodyBot - low);
 
-            bool isBullRejection = lowerWick >= 2.0 * upperWick;
-            bool isBearRejection = upperWick >= 2.0 * lowerWick;
+            bool isBullRejection = lowerWick >= 1.5 * upperWick;
+            bool isBearRejection = upperWick >= 1.5 * lowerWick;
 
-            if (UseOpeningRange && TryBullRetest(index, "ORH", rangeHigh,   brokeUpORH,   low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
-            if (UsePreviousDay && TryBullRetest(index, "PDH", prevSessHigh, brokeUpPDH,   low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
-            if (UsePremarket   && TryBullRetest(index, "PMH", preMarketHigh, brokeUpPMH,  low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
+            if (UseOpeningRange && TryBullRetest(index, "ORH", rangeHigh, brokeUpORH, low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
+            if (UsePreviousDay && TryBullRetest(index, "PDH", prevSessHigh, brokeUpPDH, low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
+            if (UsePremarket && TryBullRetest(index, "PMH", preMarketHigh, brokeUpPMH, low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
 
-            if (UseOpeningRange && TryBearRetest(index, "ORL", rangeLow,    brokeDownORL,  high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
-            if (UsePreviousDay && TryBearRetest(index, "PDL", prevSessLow,  brokeDownPDL,  high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
-            if (UsePremarket   && TryBearRetest(index, "PML", preMarketLow, brokeDownPML,  high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
+            if (UseOpeningRange && TryBearRetest(index, "ORL", rangeLow, brokeDownORL, high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
+            if (UsePreviousDay && TryBearRetest(index, "PDL", prevSessLow, brokeDownPDL, high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
+            if (UsePremarket && TryBearRetest(index, "PML", preMarketLow, brokeDownPML, high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
         }
 
         // Breakout: prioridad OR > PD > PM
         private void CheckAndMarkBreakouts(int index)
         {
-            double open  = Bars.OpenPrices[index];
+            double open = Bars.OpenPrices[index];
             double close = Bars.ClosePrices[index];
 
             bool isGreen = close > open;
-            bool isRed   = close < open;
+            bool isRed = close < open;
             if (!isGreen && !isRed) return;
 
             // OR
@@ -299,8 +299,8 @@ namespace cAlgo.Indicators
         {
             if (!brokeUp || double.IsNaN(level) || !isGreen || !isRejection) return false;
 
-            bool wickTouches = curLow <= level && bodyBot >= level; // mecha toca y cuerpo por encima
-            bool prevHighOk  = prevHigh > Bars.HighPrices[index];   // máximo previo mayor al actual
+            bool wickTouches = curLow <= level && bodyBot >= level && bodyTop >= level; // mecha toca y cuerpo por encima
+            bool prevHighOk = prevHigh > Bars.HighPrices[index];   // máximo previo mayor al actual
 
             if (wickTouches && prevHighOk)
             {
@@ -323,8 +323,8 @@ namespace cAlgo.Indicators
         {
             if (!brokeDown || double.IsNaN(level) || !isRed || !isRejection) return false;
 
-            bool wickTouches = curHigh >= level && bodyTop <= level; // mecha toca y cuerpo por debajo
-            bool prevLowOk   = prevLow < Bars.LowPrices[index];      // mínimo previo menor al actual
+            bool wickTouches = curHigh >= level && bodyTop <= level && bodyBot <= level; // mecha toca y cuerpo por debajo
+            bool prevLowOk = prevLow < Bars.LowPrices[index];      // mínimo previo menor al actual
 
             if (wickTouches && prevLowOk)
             {
@@ -344,14 +344,14 @@ namespace cAlgo.Indicators
         private void ComputePreviousSessionHL()
         {
             prevSessHigh = double.NaN;
-            prevSessLow  = double.NaN;
+            prevSessLow = double.NaN;
 
             // Busca hasta 7 días hacia atrás para saltar fines de semana/feriados
             for (int back = 1; back <= 7; back++)
             {
                 var d = currentEtDate.AddDays(-back);
                 var startEt = d.AddHours(9).AddMinutes(30);
-                var endEt   = d.AddHours(16);
+                var endEt = d.AddHours(16);
 
                 double hi = double.NaN, lo = double.NaN;
                 bool found = false;
@@ -372,7 +372,7 @@ namespace cAlgo.Indicators
                 if (found)
                 {
                     prevSessHigh = hi;
-                    prevSessLow  = lo;
+                    prevSessLow = lo;
                     break;
                 }
             }
@@ -394,7 +394,7 @@ namespace cAlgo.Indicators
         {
             int y = etLocal.Year;
             var start = NthWeekdayOfMonth(y, 3, DayOfWeek.Sunday, 2).AddHours(2);
-            var end   = NthWeekdayOfMonth(y, 11, DayOfWeek.Sunday, 1).AddHours(2);
+            var end = NthWeekdayOfMonth(y, 11, DayOfWeek.Sunday, 1).AddHours(2);
             return etLocal >= start && etLocal < end;
         }
 
