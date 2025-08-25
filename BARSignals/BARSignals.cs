@@ -15,6 +15,9 @@ namespace cAlgo.Indicators
         [Output("SellSignal", PlotType = PlotType.Points, LineColor = "Red")]
         public IndicatorDataSeries SellSignal { get; set; }
 
+        [Output("RetestLevel", PlotType = PlotType.DiscontinuousLine, LineColor = "Transparent")]
+        public IndicatorDataSeries RetestLevel { get; set; }
+
         [Parameter("Usar Opening Range", DefaultValue = true, Group = "Niveles")]
         public bool UseOpeningRange { get; set; }
 
@@ -65,6 +68,7 @@ namespace cAlgo.Indicators
         {
             BuySignal[index] = double.NaN;
             SellSignal[index] = double.NaN;
+            RetestLevel[index] = double.NaN;
 
             var utc = Bars.OpenTimes[index];
             var et = UtcToEt(utc);
@@ -311,6 +315,7 @@ namespace cAlgo.Indicators
                     Chart.DrawIcon(id, ChartIconType.UpTriangle, Bars.OpenTimes[index], curLow - offset, Color.LimeGreen);
                 }
                 BuySignal[index] = 1.0;
+                RetestLevel[index] = level;
                 FireAlert($"RT_{tag}", "BUY", index, Bars.ClosePrices[index]);
                 return true;
             }
@@ -335,6 +340,7 @@ namespace cAlgo.Indicators
                     Chart.DrawIcon(id, ChartIconType.DownTriangle, Bars.OpenTimes[index], curHigh + offset, Color.Red);
                 }
                 SellSignal[index] = -1.0;
+                RetestLevel[index] = level;
                 FireAlert($"RT_{tag}", "SELL", index, Bars.ClosePrices[index]);
                 return true;
             }
