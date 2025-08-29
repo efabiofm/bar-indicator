@@ -211,13 +211,13 @@ namespace cAlgo.Indicators
             double upperWick = Math.Max(0.0, high - bodyTop);
             double lowerWick = Math.Max(0.0, bodyBot - low);
 
-            bool closeAboveLevel = close > level;
+            bool openAboveLevel = open > level;
             bool lowerWickTouches = low < level;
             bool isBullRejection = lowerWick >= 1.5 * upperWick;
             bool isGreen = close > open;
             bool prevHighOk = prevHigh > high;
 
-            return closeAboveLevel && lowerWickTouches && isBullRejection && isGreen && prevHighOk;
+            return openAboveLevel && lowerWickTouches && isBullRejection && isGreen && prevHighOk;
         }
 
         private bool IsBearPinBar(int index, double level)
@@ -233,13 +233,13 @@ namespace cAlgo.Indicators
             double upperWick = Math.Max(0.0, high - bodyTop);
             double lowerWick = Math.Max(0.0, bodyBot - low);
 
-            bool closeBelowLevel = close < level;
+            bool openBelowLevel = open < level;
             bool upperWickTouches = high > level;
             bool isBearRejection = upperWick >= 1.5 * lowerWick;
             bool isRed = close < open;
             bool prevLowOk = prevLow < low;
 
-            return closeBelowLevel && upperWickTouches && isBearRejection && isRed && prevLowOk;
+            return openBelowLevel && upperWickTouches && isBearRejection && isRed && prevLowOk;
         }
 
         // -------- Señales --------
