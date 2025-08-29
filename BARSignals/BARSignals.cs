@@ -10,10 +10,7 @@ namespace cAlgo.Indicators
     [Indicator(IsOverlay = true, AccessRights = AccessRights.None)]
     public class BARSignals : Indicator
     {
-        [Output("BuySignal", PlotType = PlotType.Points, LineColor = "LimeGreen")]
         public IndicatorDataSeries BuySignal { get; set; }
-
-        [Output("SellSignal", PlotType = PlotType.Points, LineColor = "Red")]
         public IndicatorDataSeries SellSignal { get; set; }
 
         [Output("RetestLevel", PlotType = PlotType.DiscontinuousLine, LineColor = "Transparent")]
@@ -67,6 +64,12 @@ namespace cAlgo.Indicators
 
         // Evitar duplicados intra-bar
         private readonly HashSet<string> _marked = new HashSet<string>();
+
+        protected override void Initialize()
+        {
+            BuySignal  = CreateDataSeries();
+            SellSignal = CreateDataSeries();
+        }
 
         public override void Calculate(int index)
         {
@@ -311,10 +314,7 @@ namespace cAlgo.Indicators
             if (_marked.Add(id))
             {
                 double close = Bars.ClosePrices[index];
-                double offset = Symbol.PipSize * 3;
-                var price = isUp ? close - offset : close + offset;
-                Chart.DrawIcon(id, isUp ? ChartIconType.UpTriangle : ChartIconType.DownTriangle,
-                               Bars.OpenTimes[index], price, isUp ? Color.LimeGreen : Color.Red);
+                Chart.DrawIcon(id, isUp ? ChartIconType.UpTriangle : ChartIconType.DownTriangle, Bars.OpenTimes[index], close, isUp ? Color.LimeGreen : Color.Red);
             }
 
             if (isUp)
@@ -338,8 +338,7 @@ namespace cAlgo.Indicators
                 string id = $"RT_UP_{tag}_{Bars.OpenTimes[index]:yyyyMMddHHmm}_{index}";
                 if (_marked.Add(id))
                 {
-                    double offset = Symbol.PipSize * 3;
-                    Chart.DrawIcon(id, ChartIconType.UpTriangle, Bars.OpenTimes[index], Bars.LowPrices[index] - offset, Color.LimeGreen);
+                    Chart.DrawIcon(id, ChartIconType.UpTriangle, Bars.OpenTimes[index], Bars.LowPrices[index], Color.LimeGreen);
                 }
                 BuySignal[index] = 1.0;
                 RetestLevel[index] = level;
@@ -360,8 +359,7 @@ namespace cAlgo.Indicators
                 string id = $"RT_DN_{tag}_{Bars.OpenTimes[index]:yyyyMMddHHmm}_{index}";
                 if (_marked.Add(id))
                 {
-                    double offset = Symbol.PipSize * 3;
-                    Chart.DrawIcon(id, ChartIconType.DownTriangle, Bars.OpenTimes[index], Bars.HighPrices[index] + offset, Color.Red);
+                    Chart.DrawIcon(id, ChartIconType.DownTriangle, Bars.OpenTimes[index], Bars.HighPrices[index], Color.Red);
                 }
                 SellSignal[index] = -1.0;
                 RetestLevel[index] = level;
