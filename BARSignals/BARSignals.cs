@@ -10,11 +10,11 @@ namespace cAlgo.Indicators
     [Indicator(IsOverlay = true, AccessRights = AccessRights.None)]
     public class BARSignals : Indicator
     {
+        [Output("BuySignal", PlotType = PlotType.Points, LineColor = "Transparent")]
         public IndicatorDataSeries BuySignal { get; set; }
-        public IndicatorDataSeries SellSignal { get; set; }
 
-        [Output("RetestLevel", PlotType = PlotType.DiscontinuousLine, LineColor = "Transparent")]
-        public IndicatorDataSeries RetestLevel { get; set; }
+        [Output("SellSignal", PlotType = PlotType.Points, LineColor = "Transparent")]
+        public IndicatorDataSeries SellSignal { get; set; }
 
         [Parameter("Opening Range Timeframe", DefaultValue = 15)]
         public int OpeningRangeTF { get; set; }
@@ -65,17 +65,10 @@ namespace cAlgo.Indicators
         // Evitar duplicados intra-bar
         private readonly HashSet<string> _marked = new HashSet<string>();
 
-        protected override void Initialize()
-        {
-            BuySignal  = CreateDataSeries();
-            SellSignal = CreateDataSeries();
-        }
-
         public override void Calculate(int index)
         {
             BuySignal[index] = double.NaN;
             SellSignal[index] = double.NaN;
-            RetestLevel[index] = double.NaN;
 
             var utc = Bars.OpenTimes[index];
             var et = TimeUtils.UtcToEt(utc);
@@ -317,6 +310,7 @@ namespace cAlgo.Indicators
                 Chart.DrawIcon(id, isUp ? ChartIconType.UpTriangle : ChartIconType.DownTriangle, Bars.OpenTimes[index], close, isUp ? Color.LimeGreen : Color.Red);
             }
 
+            // TODO: Asignar el nivel roto en vez de 1.0 / -1.0
             if (isUp)
                 BuySignal[index] = 1.0;
             else
@@ -340,8 +334,7 @@ namespace cAlgo.Indicators
                 {
                     Chart.DrawIcon(id, ChartIconType.UpTriangle, Bars.OpenTimes[index], Bars.LowPrices[index], Color.LimeGreen);
                 }
-                BuySignal[index] = 1.0;
-                RetestLevel[index] = level;
+                BuySignal[index] = level;
                 FireAlert($"RT_{tag}", "BUY", index, Bars.ClosePrices[index]);
                 return true;
             }
@@ -361,8 +354,7 @@ namespace cAlgo.Indicators
                 {
                     Chart.DrawIcon(id, ChartIconType.DownTriangle, Bars.OpenTimes[index], Bars.HighPrices[index], Color.Red);
                 }
-                SellSignal[index] = -1.0;
-                RetestLevel[index] = level;
+                SellSignal[index] = level;
                 FireAlert($"RT_{tag}", "SELL", index, Bars.ClosePrices[index]);
                 return true;
             }
