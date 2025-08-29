@@ -1,6 +1,7 @@
 using cAlgo.API;
 using System;
 using System.Collections.Generic;
+using Utils;
 
 namespace cAlgo.Indicators
 {
@@ -18,6 +19,9 @@ namespace cAlgo.Indicators
         [Output("RetestLevel", PlotType = PlotType.DiscontinuousLine, LineColor = "Transparent")]
         public IndicatorDataSeries RetestLevel { get; set; }
 
+        [Parameter("Opening Range Timeframe", DefaultValue = 15)]
+        public int OpeningRangeTF { get; set; }
+
         [Parameter("Usar Opening Range", DefaultValue = true, Group = "Niveles")]
         public bool UseOpeningRange { get; set; }
 
@@ -27,10 +31,10 @@ namespace cAlgo.Indicators
         [Parameter("Usar Previous Day", DefaultValue = true, Group = "Niveles")]
         public bool UsePreviousDay { get; set; }
 
-        [Parameter("Modo de Señal", DefaultValue = SignalKind.Retest, Group = "Señales")]
+        [Parameter("Modo de Señal", DefaultValue = SignalKind.Retest)]
         public SignalKind Mode { get; set; }
 
-        [Parameter("Alertas: Sonido", DefaultValue = true)]
+        [Parameter("Alertas: Sonido", DefaultValue = false)]
         public bool AlertsSound { get; set; }
 
         // OR15
@@ -71,7 +75,7 @@ namespace cAlgo.Indicators
             RetestLevel[index] = double.NaN;
 
             var utc = Bars.OpenTimes[index];
-            var et = UtcToEt(utc);
+            var et = TimeUtils.UtcToEt(utc);
 
             // Nuevo día ET
             if (et.Date != currentEtDate)
@@ -94,13 +98,13 @@ namespace cAlgo.Indicators
             }
 
             var orStartEt = currentEtDate.AddHours(9).AddMinutes(30);
-            var orEndEt = orStartEt.AddMinutes(15);
+            var orEndEt = orStartEt.AddMinutes(OpeningRangeTF);
             var sessEndEt = currentEtDate.AddHours(16);
             var preMarketEt1 = currentEtDate.AddHours(4);
             var preMarketEt2 = orStartEt.AddMinutes(-1);
 
-            var orStartUtc = EtToUtc(orStartEt);
-            var sessEndUtc = EtToUtc(sessEndEt);
+            var orStartUtc = TimeUtils.EtToUtc(orStartEt);
+            var sessEndUtc = TimeUtils.EtToUtc(sessEndEt);
 
             // Construcción OR 9:30–9:45
             if (UseOpeningRange && et >= orStartEt && et < orEndEt)
@@ -192,6 +196,52 @@ namespace cAlgo.Indicators
                 if (!brokeDownPML && open > preMarketLow && close <= preMarketLow && close < open) brokeDownPML = true;
         }
 
+        // -------- Pin bar helpers --------
+
+        private bool IsBullPinBar(int index, double level)
+        {
+            double open = Bars.OpenPrices[index];
+            double close = Bars.ClosePrices[index];
+            double high = Bars.HighPrices[index];
+            double low = Bars.LowPrices[index];
+            double prevHigh = Bars.HighPrices[index - 1];
+
+            double bodyTop = Math.Max(open, close);
+            double bodyBot = Math.Min(open, close);
+            double upperWick = Math.Max(0.0, high - bodyTop);
+            double lowerWick = Math.Max(0.0, bodyBot - low);
+
+            bool closeAboveLevel = close > level;
+            bool lowerWickTouches = low < level;
+            bool isBullRejection = lowerWick >= 1.5 * upperWick;
+            bool isGreen = close > open;
+            bool prevHighOk = prevHigh > high;
+
+            return closeAboveLevel && lowerWickTouches && isBullRejection && isGreen && prevHighOk;
+        }
+
+        private bool IsBearPinBar(int index, double level)
+        {
+            double open = Bars.OpenPrices[index];
+            double close = Bars.ClosePrices[index];
+            double high = Bars.HighPrices[index];
+            double low = Bars.LowPrices[index];
+            double prevLow = Bars.LowPrices[index - 1];
+
+            double bodyTop = Math.Max(open, close);
+            double bodyBot = Math.Min(open, close);
+            double upperWick = Math.Max(0.0, high - bodyTop);
+            double lowerWick = Math.Max(0.0, bodyBot - low);
+
+            bool closeBelowLevel = close < level;
+            bool upperWickTouches = high > level;
+            bool isBearRejection = upperWick >= 1.5 * lowerWick;
+            bool isRed = close < open;
+            bool prevLowOk = prevLow < low;
+
+            return closeBelowLevel && upperWickTouches && isBearRejection && isRed && prevLowOk;
+        }
+
         // -------- Señales --------
 
         // Retest: prioridad OR > PD > PM
@@ -199,33 +249,13 @@ namespace cAlgo.Indicators
         {
             if (index < 1) return;
 
-            double open = Bars.OpenPrices[index];
-            double close = Bars.ClosePrices[index];
-            double high = Bars.HighPrices[index];
-            double low = Bars.LowPrices[index];
+            if (UseOpeningRange && TryBullRetest(index, "ORH", rangeHigh, brokeUpORH)) return;
+            if (UsePreviousDay && TryBullRetest(index, "PDH", prevSessHigh, brokeUpPDH)) return;
+            if (UsePremarket && TryBullRetest(index, "PMH", preMarketHigh, brokeUpPMH)) return;
 
-            double prevHigh = Bars.HighPrices[index - 1];
-            double prevLow = Bars.LowPrices[index - 1];
-
-            bool isGreen = close > open;
-            bool isRed = close < open;
-            if (!isGreen && !isRed) return;
-
-            double bodyTop = Math.Max(open, close);
-            double bodyBot = Math.Min(open, close);
-            double upperWick = Math.Max(0.0, high - bodyTop);
-            double lowerWick = Math.Max(0.0, bodyBot - low);
-
-            bool isBullRejection = lowerWick >= 1.5 * upperWick;
-            bool isBearRejection = upperWick >= 1.5 * lowerWick;
-
-            if (UseOpeningRange && TryBullRetest(index, "ORH", rangeHigh, brokeUpORH, low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
-            if (UsePreviousDay && TryBullRetest(index, "PDH", prevSessHigh, brokeUpPDH, low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
-            if (UsePremarket && TryBullRetest(index, "PMH", preMarketHigh, brokeUpPMH, low, bodyBot, bodyTop, prevHigh, isBullRejection, isGreen)) return;
-
-            if (UseOpeningRange && TryBearRetest(index, "ORL", rangeLow, brokeDownORL, high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
-            if (UsePreviousDay && TryBearRetest(index, "PDL", prevSessLow, brokeDownPDL, high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
-            if (UsePremarket && TryBearRetest(index, "PML", preMarketLow, brokeDownPML, high, bodyBot, bodyTop, prevLow, isBearRejection, isRed)) return;
+            if (UseOpeningRange && TryBearRetest(index, "ORL", rangeLow, brokeDownORL)) return;
+            if (UsePreviousDay && TryBearRetest(index, "PDL", prevSessLow, brokeDownPDL)) return;
+            if (UsePremarket && TryBearRetest(index, "PML", preMarketLow, brokeDownPML)) return;
         }
 
         // Breakout: prioridad OR > PD > PM
@@ -297,22 +327,19 @@ namespace cAlgo.Indicators
 
         // -------- Retest helpers --------
 
-        private bool TryBullRetest(int index, string tag, double level, bool brokeUp,
-                                   double curLow, double bodyBot, double bodyTop,
-                                   double prevHigh, bool isRejection, bool isGreen)
+        private bool TryBullRetest(int index, string tag, double level, bool brokeUp)
         {
-            if (!brokeUp || double.IsNaN(level) || !isGreen || !isRejection) return false;
+            if (!brokeUp || double.IsNaN(level)) return false;
 
-            bool wickTouches = curLow <= level && bodyBot >= level && bodyTop >= level; // mecha toca y cuerpo por encima
-            bool prevHighOk = prevHigh > Bars.HighPrices[index];   // máximo previo mayor al actual
+            bool pin = IsBullPinBar(index, level);
 
-            if (wickTouches && prevHighOk)
+            if (pin)
             {
                 string id = $"RT_UP_{tag}_{Bars.OpenTimes[index]:yyyyMMddHHmm}_{index}";
                 if (_marked.Add(id))
                 {
                     double offset = Symbol.PipSize * 3;
-                    Chart.DrawIcon(id, ChartIconType.UpTriangle, Bars.OpenTimes[index], curLow - offset, Color.LimeGreen);
+                    Chart.DrawIcon(id, ChartIconType.UpTriangle, Bars.OpenTimes[index], Bars.LowPrices[index] - offset, Color.LimeGreen);
                 }
                 BuySignal[index] = 1.0;
                 RetestLevel[index] = level;
@@ -322,22 +349,19 @@ namespace cAlgo.Indicators
             return false;
         }
 
-        private bool TryBearRetest(int index, string tag, double level, bool brokeDown,
-                                   double curHigh, double bodyBot, double bodyTop,
-                                   double prevLow, bool isRejection, bool isRed)
+        private bool TryBearRetest(int index, string tag, double level, bool brokeDown)
         {
-            if (!brokeDown || double.IsNaN(level) || !isRed || !isRejection) return false;
+            if (!brokeDown || double.IsNaN(level)) return false;
 
-            bool wickTouches = curHigh >= level && bodyTop <= level && bodyBot <= level; // mecha toca y cuerpo por debajo
-            bool prevLowOk = prevLow < Bars.LowPrices[index];      // mínimo previo menor al actual
+            bool pin = IsBearPinBar(index, level);
 
-            if (wickTouches && prevLowOk)
+            if (pin)
             {
                 string id = $"RT_DN_{tag}_{Bars.OpenTimes[index]:yyyyMMddHHmm}_{index}";
                 if (_marked.Add(id))
                 {
                     double offset = Symbol.PipSize * 3;
-                    Chart.DrawIcon(id, ChartIconType.DownTriangle, Bars.OpenTimes[index], curHigh + offset, Color.Red);
+                    Chart.DrawIcon(id, ChartIconType.DownTriangle, Bars.OpenTimes[index], Bars.HighPrices[index] + offset, Color.Red);
                 }
                 SellSignal[index] = -1.0;
                 RetestLevel[index] = level;
@@ -364,7 +388,7 @@ namespace cAlgo.Indicators
 
                 for (int i = 0; i < Bars.Count; i++)
                 {
-                    var et = UtcToEt(Bars.OpenTimes[i]);
+                    var et = TimeUtils.UtcToEt(Bars.OpenTimes[i]);
                     if (et >= startEt && et <= endEt)
                     {
                         var h = Bars.HighPrices[i];
@@ -382,34 +406,6 @@ namespace cAlgo.Indicators
                     break;
                 }
             }
-        }
-
-        // ---- Conversión UTC <-> ET con DST EE. UU. ----
-        private DateTime UtcToEt(DateTime utc)
-        {
-            return IsEtDstByLocalDate(utc.AddHours(-5)) ? utc.AddHours(-4) : utc.AddHours(-5);
-        }
-
-        private DateTime EtToUtc(DateTime etLocal)
-        {
-            int offset = IsEtDstByLocalDate(etLocal) ? -4 : -5;
-            return etLocal.AddHours(-offset);
-        }
-
-        private bool IsEtDstByLocalDate(DateTime etLocal)
-        {
-            int y = etLocal.Year;
-            var start = NthWeekdayOfMonth(y, 3, DayOfWeek.Sunday, 2).AddHours(2);
-            var end = NthWeekdayOfMonth(y, 11, DayOfWeek.Sunday, 1).AddHours(2);
-            return etLocal >= start && etLocal < end;
-        }
-
-        private DateTime NthWeekdayOfMonth(int year, int month, DayOfWeek dow, int n)
-        {
-            var first = new DateTime(year, month, 1);
-            int offset = ((int)dow - (int)first.DayOfWeek + 7) % 7;
-            int day = 1 + offset + (n - 1) * 7;
-            return new DateTime(year, month, day);
         }
 
         private void FireAlert(string context, string side, int index, double price)
