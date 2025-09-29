@@ -1,6 +1,5 @@
 using cAlgo.API;
 using System;
-using System.Collections.Generic;
 using Utils;
 
 namespace cAlgo.Indicators
@@ -61,9 +60,6 @@ namespace cAlgo.Indicators
         private string PDLId => $"PDL_SEG_{currentEtDate:yyyyMMdd}";
         private string PMHId => $"PMH_SEG_{currentEtDate:yyyyMMdd}";
         private string PMLId => $"PML_SEG_{currentEtDate:yyyyMMdd}";
-
-        // Evitar duplicados intra-bar
-        private readonly HashSet<string> _marked = new HashSet<string>();
 
         public override void Calculate(int index)
         {
@@ -140,13 +136,11 @@ namespace cAlgo.Indicators
 
         private void DrawSessionSegments(DateTime x1Utc, DateTime x2Utc)
         {
-            // OR15 gris
             if (UseOpeningRange && !double.IsNaN(rangeHigh))
                 Chart.DrawTrendLine(HighId, x1Utc, rangeHigh, x2Utc, rangeHigh, Color.Gray, 1, LineStyle.Solid);
             if (UseOpeningRange && !double.IsNaN(rangeLow))
                 Chart.DrawTrendLine(LowId, x1Utc, rangeLow, x2Utc, rangeLow, Color.Gray, 1, LineStyle.Solid);
 
-            // Mid (rayas)
             if (UseOpeningRange)
             {
                 var mid = (!double.IsNaN(rangeHigh) && !double.IsNaN(rangeLow)) ? (rangeHigh + rangeLow) * 0.5 : double.NaN;
@@ -154,20 +148,17 @@ namespace cAlgo.Indicators
                     Chart.DrawTrendLine(MidId, x1Utc, mid, x2Utc, mid, Color.Gray, 1, LineStyle.Lines);
             }
 
-            // PDH/PDL amarillo
             if (UsePreviousDay && !double.IsNaN(prevSessHigh))
                 Chart.DrawTrendLine(PDHId, x1Utc, prevSessHigh, x2Utc, prevSessHigh, Color.Yellow, 1, LineStyle.Solid);
             if (UsePreviousDay && !double.IsNaN(prevSessLow))
                 Chart.DrawTrendLine(PDLId, x1Utc, prevSessLow, x2Utc, prevSessLow, Color.Yellow, 1, LineStyle.Solid);
 
-            // PMH/PML azul
             if (UsePremarket && !double.IsNaN(preMarketHigh))
                 Chart.DrawTrendLine(PMHId, x1Utc, preMarketHigh, x2Utc, preMarketHigh, Color.Blue, 1, LineStyle.Solid);
             if (UsePremarket && !double.IsNaN(preMarketLow))
                 Chart.DrawTrendLine(PMLId, x1Utc, preMarketLow, x2Utc, preMarketLow, Color.Blue, 1, LineStyle.Solid);
         }
 
-        // Marca estado de breakout por nivel usando CUERPO
         private void UpdateBreakoutState(int index)
         {
             double open = Bars.OpenPrices[index];
@@ -191,8 +182,6 @@ namespace cAlgo.Indicators
             if (UsePremarket && !double.IsNaN(preMarketLow))
                 if (!brokeDownPML && open > preMarketLow && close <= preMarketLow && close < open) brokeDownPML = true;
         }
-
-        // -------- Pin bar helpers --------
 
         private bool IsBullPinBar(int index, double level)
         {
@@ -238,9 +227,6 @@ namespace cAlgo.Indicators
             return openBelowLevel && upperWickTouches && isBearRejection && isRed && prevLowOk;
         }
 
-        // -------- Señales --------
-
-        // Retest: prioridad OR > PD > PM
         private void CheckAndMarkRetests(int index)
         {
             if (index < 1) return;
@@ -254,7 +240,6 @@ namespace cAlgo.Indicators
             if (UsePremarket && TryBearRetest(index, "PML", preMarketLow, brokeDownPML)) return;
         }
 
-        // Breakout: prioridad OR > PD > PM
         private void CheckAndMarkBreakouts(int index)
         {
             double open = Bars.OpenPrices[index];
@@ -264,7 +249,6 @@ namespace cAlgo.Indicators
             bool isRed = close < open;
             if (!isGreen && !isRed) return;
 
-            // OR
             if (UseOpeningRange && !double.IsNaN(rangeHigh) && isGreen && open < rangeHigh && close >= rangeHigh)
             {
                 TryMarkBreakout(index, "ORH", true);
@@ -276,7 +260,6 @@ namespace cAlgo.Indicators
                 return;
             }
 
-            // PD
             if (UsePreviousDay && !double.IsNaN(prevSessHigh) && isGreen && open < prevSessHigh && close >= prevSessHigh)
             {
                 TryMarkBreakout(index, "PDH", true);
@@ -288,7 +271,6 @@ namespace cAlgo.Indicators
                 return;
             }
 
-            // PM
             if (UsePremarket && !double.IsNaN(preMarketHigh) && isGreen && open < preMarketHigh && close >= preMarketHigh)
             {
                 TryMarkBreakout(index, "PMH", true);
@@ -303,37 +285,32 @@ namespace cAlgo.Indicators
 
         private void TryMarkBreakout(int index, string tag, bool isUp)
         {
-            string id = $"BK_{(isUp ? "UP" : "DN")}_{tag}_{Bars.OpenTimes[index]:yyyyMMddHHmm}_{index}";
-            if (_marked.Add(id))
-            {
-                double close = Bars.ClosePrices[index];
-                Chart.DrawIcon(id, isUp ? ChartIconType.UpTriangle : ChartIconType.DownTriangle, Bars.OpenTimes[index], close, isUp ? Color.LimeGreen : Color.Red);
-            }
+            string id = $"BK_{(isUp ? "UP" : "DN")}_{tag}_{index}";
+            Chart.RemoveObject(id);
 
-            // TODO: Asignar el nivel roto en vez de 1.0 / -1.0
+            double close = Bars.ClosePrices[index];
+            Chart.DrawIcon(id, isUp ? ChartIconType.UpTriangle : ChartIconType.DownTriangle,
+                           Bars.OpenTimes[index], close, isUp ? Color.LimeGreen : Color.Red);
+
             if (isUp)
                 BuySignal[index] = 1.0;
             else
                 SellSignal[index] = -1.0;
 
-            FireAlert($"BK_{tag}", isUp ? "BUY" : "SELL", index, Bars.ClosePrices[index]);
+            FireAlert($"BK_{tag}", isUp ? "BUY" : "SELL", index, close);
         }
-
-        // -------- Retest helpers --------
 
         private bool TryBullRetest(int index, string tag, double level, bool brokeUp)
         {
+            string id = $"RT_UP_{tag}_{index}";
+            Chart.RemoveObject(id);
+
             if (!brokeUp || double.IsNaN(level)) return false;
 
             bool pin = IsBullPinBar(index, level);
-
             if (pin)
             {
-                string id = $"RT_UP_{tag}_{Bars.OpenTimes[index]:yyyyMMddHHmm}_{index}";
-                if (_marked.Add(id))
-                {
-                    Chart.DrawIcon(id, ChartIconType.UpTriangle, Bars.OpenTimes[index], Bars.LowPrices[index], Color.LimeGreen);
-                }
+                Chart.DrawIcon(id, ChartIconType.UpTriangle, Bars.OpenTimes[index], Bars.LowPrices[index], Color.LimeGreen);
                 BuySignal[index] = level;
                 FireAlert($"RT_{tag}", "BUY", index, Bars.ClosePrices[index]);
                 return true;
@@ -343,17 +320,15 @@ namespace cAlgo.Indicators
 
         private bool TryBearRetest(int index, string tag, double level, bool brokeDown)
         {
+            string id = $"RT_DN_{tag}_{index}";
+            Chart.RemoveObject(id);
+
             if (!brokeDown || double.IsNaN(level)) return false;
 
             bool pin = IsBearPinBar(index, level);
-
             if (pin)
             {
-                string id = $"RT_DN_{tag}_{Bars.OpenTimes[index]:yyyyMMddHHmm}_{index}";
-                if (_marked.Add(id))
-                {
-                    Chart.DrawIcon(id, ChartIconType.DownTriangle, Bars.OpenTimes[index], Bars.HighPrices[index], Color.Red);
-                }
+                Chart.DrawIcon(id, ChartIconType.DownTriangle, Bars.OpenTimes[index], Bars.HighPrices[index], Color.Red);
                 SellSignal[index] = level;
                 FireAlert($"RT_{tag}", "SELL", index, Bars.ClosePrices[index]);
                 return true;
@@ -366,7 +341,6 @@ namespace cAlgo.Indicators
             prevSessHigh = double.NaN;
             prevSessLow = double.NaN;
 
-            // Busca hasta 7 días hacia atrás para saltar fines de semana/feriados
             for (int back = 1; back <= 7; back++)
             {
                 var d = currentEtDate.AddDays(-back);
